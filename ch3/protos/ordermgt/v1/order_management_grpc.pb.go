@@ -11,6 +11,7 @@ import (
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
+	emptypb "google.golang.org/protobuf/types/known/emptypb"
 	wrapperspb "google.golang.org/protobuf/types/known/wrapperspb"
 )
 
@@ -20,16 +21,22 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	OrderManagementService_GetOrder_FullMethodName  = "/ecommerce.v1.OrderManagementService/GetOrder"
-	OrderManagementService_GetOrders_FullMethodName = "/ecommerce.v1.OrderManagementService/GetOrders"
+	OrderManagementService_CreateOrder_FullMethodName  = "/ecommerce.v1.OrderManagementService/CreateOrder"
+	OrderManagementService_CreateOrders_FullMethodName = "/ecommerce.v1.OrderManagementService/CreateOrders"
+	OrderManagementService_GetOrder_FullMethodName     = "/ecommerce.v1.OrderManagementService/GetOrder"
+	OrderManagementService_GetOrders_FullMethodName    = "/ecommerce.v1.OrderManagementService/GetOrders"
+	OrderManagementService_PackOrders_FullMethodName   = "/ecommerce.v1.OrderManagementService/PackOrders"
 )
 
 // OrderManagementServiceClient is the client API for OrderManagementService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type OrderManagementServiceClient interface {
+	CreateOrder(ctx context.Context, in *CreateOrderRequest, opts ...grpc.CallOption) (*CreateOrderResponse, error)
+	CreateOrders(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[CreateOrdersRequest, CreateOrdersResponse], error)
 	GetOrder(ctx context.Context, in *wrapperspb.StringValue, opts ...grpc.CallOption) (*GetOrderResponse, error)
-	GetOrders(ctx context.Context, in *GetOrdersRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[GetOrdersResponse], error)
+	GetOrders(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (grpc.ServerStreamingClient[GetOrdersResponse], error)
+	PackOrders(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[PackOrdersRequest, PackOrdersResponse], error)
 }
 
 type orderManagementServiceClient struct {
@@ -39,6 +46,29 @@ type orderManagementServiceClient struct {
 func NewOrderManagementServiceClient(cc grpc.ClientConnInterface) OrderManagementServiceClient {
 	return &orderManagementServiceClient{cc}
 }
+
+func (c *orderManagementServiceClient) CreateOrder(ctx context.Context, in *CreateOrderRequest, opts ...grpc.CallOption) (*CreateOrderResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateOrderResponse)
+	err := c.cc.Invoke(ctx, OrderManagementService_CreateOrder_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *orderManagementServiceClient) CreateOrders(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[CreateOrdersRequest, CreateOrdersResponse], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &OrderManagementService_ServiceDesc.Streams[0], OrderManagementService_CreateOrders_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[CreateOrdersRequest, CreateOrdersResponse]{ClientStream: stream}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type OrderManagementService_CreateOrdersClient = grpc.ClientStreamingClient[CreateOrdersRequest, CreateOrdersResponse]
 
 func (c *orderManagementServiceClient) GetOrder(ctx context.Context, in *wrapperspb.StringValue, opts ...grpc.CallOption) (*GetOrderResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
@@ -50,13 +80,13 @@ func (c *orderManagementServiceClient) GetOrder(ctx context.Context, in *wrapper
 	return out, nil
 }
 
-func (c *orderManagementServiceClient) GetOrders(ctx context.Context, in *GetOrdersRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[GetOrdersResponse], error) {
+func (c *orderManagementServiceClient) GetOrders(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (grpc.ServerStreamingClient[GetOrdersResponse], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &OrderManagementService_ServiceDesc.Streams[0], OrderManagementService_GetOrders_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &OrderManagementService_ServiceDesc.Streams[1], OrderManagementService_GetOrders_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &grpc.GenericClientStream[GetOrdersRequest, GetOrdersResponse]{ClientStream: stream}
+	x := &grpc.GenericClientStream[emptypb.Empty, GetOrdersResponse]{ClientStream: stream}
 	if err := x.ClientStream.SendMsg(in); err != nil {
 		return nil, err
 	}
@@ -69,12 +99,28 @@ func (c *orderManagementServiceClient) GetOrders(ctx context.Context, in *GetOrd
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type OrderManagementService_GetOrdersClient = grpc.ServerStreamingClient[GetOrdersResponse]
 
+func (c *orderManagementServiceClient) PackOrders(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[PackOrdersRequest, PackOrdersResponse], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &OrderManagementService_ServiceDesc.Streams[2], OrderManagementService_PackOrders_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[PackOrdersRequest, PackOrdersResponse]{ClientStream: stream}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type OrderManagementService_PackOrdersClient = grpc.BidiStreamingClient[PackOrdersRequest, PackOrdersResponse]
+
 // OrderManagementServiceServer is the server API for OrderManagementService service.
 // All implementations must embed UnimplementedOrderManagementServiceServer
 // for forward compatibility.
 type OrderManagementServiceServer interface {
+	CreateOrder(context.Context, *CreateOrderRequest) (*CreateOrderResponse, error)
+	CreateOrders(grpc.ClientStreamingServer[CreateOrdersRequest, CreateOrdersResponse]) error
 	GetOrder(context.Context, *wrapperspb.StringValue) (*GetOrderResponse, error)
-	GetOrders(*GetOrdersRequest, grpc.ServerStreamingServer[GetOrdersResponse]) error
+	GetOrders(*emptypb.Empty, grpc.ServerStreamingServer[GetOrdersResponse]) error
+	PackOrders(grpc.BidiStreamingServer[PackOrdersRequest, PackOrdersResponse]) error
 	mustEmbedUnimplementedOrderManagementServiceServer()
 }
 
@@ -85,11 +131,20 @@ type OrderManagementServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedOrderManagementServiceServer struct{}
 
+func (UnimplementedOrderManagementServiceServer) CreateOrder(context.Context, *CreateOrderRequest) (*CreateOrderResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CreateOrder not implemented")
+}
+func (UnimplementedOrderManagementServiceServer) CreateOrders(grpc.ClientStreamingServer[CreateOrdersRequest, CreateOrdersResponse]) error {
+	return status.Errorf(codes.Unimplemented, "method CreateOrders not implemented")
+}
 func (UnimplementedOrderManagementServiceServer) GetOrder(context.Context, *wrapperspb.StringValue) (*GetOrderResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetOrder not implemented")
 }
-func (UnimplementedOrderManagementServiceServer) GetOrders(*GetOrdersRequest, grpc.ServerStreamingServer[GetOrdersResponse]) error {
+func (UnimplementedOrderManagementServiceServer) GetOrders(*emptypb.Empty, grpc.ServerStreamingServer[GetOrdersResponse]) error {
 	return status.Errorf(codes.Unimplemented, "method GetOrders not implemented")
+}
+func (UnimplementedOrderManagementServiceServer) PackOrders(grpc.BidiStreamingServer[PackOrdersRequest, PackOrdersResponse]) error {
+	return status.Errorf(codes.Unimplemented, "method PackOrders not implemented")
 }
 func (UnimplementedOrderManagementServiceServer) mustEmbedUnimplementedOrderManagementServiceServer() {
 }
@@ -113,6 +168,31 @@ func RegisterOrderManagementServiceServer(s grpc.ServiceRegistrar, srv OrderMana
 	s.RegisterService(&OrderManagementService_ServiceDesc, srv)
 }
 
+func _OrderManagementService_CreateOrder_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateOrderRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrderManagementServiceServer).CreateOrder(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: OrderManagementService_CreateOrder_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrderManagementServiceServer).CreateOrder(ctx, req.(*CreateOrderRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _OrderManagementService_CreateOrders_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(OrderManagementServiceServer).CreateOrders(&grpc.GenericServerStream[CreateOrdersRequest, CreateOrdersResponse]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type OrderManagementService_CreateOrdersServer = grpc.ClientStreamingServer[CreateOrdersRequest, CreateOrdersResponse]
+
 func _OrderManagementService_GetOrder_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(wrapperspb.StringValue)
 	if err := dec(in); err != nil {
@@ -132,15 +212,22 @@ func _OrderManagementService_GetOrder_Handler(srv interface{}, ctx context.Conte
 }
 
 func _OrderManagementService_GetOrders_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(GetOrdersRequest)
+	m := new(emptypb.Empty)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
 	}
-	return srv.(OrderManagementServiceServer).GetOrders(m, &grpc.GenericServerStream[GetOrdersRequest, GetOrdersResponse]{ServerStream: stream})
+	return srv.(OrderManagementServiceServer).GetOrders(m, &grpc.GenericServerStream[emptypb.Empty, GetOrdersResponse]{ServerStream: stream})
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type OrderManagementService_GetOrdersServer = grpc.ServerStreamingServer[GetOrdersResponse]
+
+func _OrderManagementService_PackOrders_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(OrderManagementServiceServer).PackOrders(&grpc.GenericServerStream[PackOrdersRequest, PackOrdersResponse]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type OrderManagementService_PackOrdersServer = grpc.BidiStreamingServer[PackOrdersRequest, PackOrdersResponse]
 
 // OrderManagementService_ServiceDesc is the grpc.ServiceDesc for OrderManagementService service.
 // It's only intended for direct use with grpc.RegisterService,
@@ -150,15 +237,30 @@ var OrderManagementService_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*OrderManagementServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
+			MethodName: "CreateOrder",
+			Handler:    _OrderManagementService_CreateOrder_Handler,
+		},
+		{
 			MethodName: "GetOrder",
 			Handler:    _OrderManagementService_GetOrder_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
 		{
+			StreamName:    "CreateOrders",
+			Handler:       _OrderManagementService_CreateOrders_Handler,
+			ClientStreams: true,
+		},
+		{
 			StreamName:    "GetOrders",
 			Handler:       _OrderManagementService_GetOrders_Handler,
 			ServerStreams: true,
+		},
+		{
+			StreamName:    "PackOrders",
+			Handler:       _OrderManagementService_PackOrders_Handler,
+			ServerStreams: true,
+			ClientStreams: true,
 		},
 	},
 	Metadata: "ecommerce/v1/order_management.proto",
