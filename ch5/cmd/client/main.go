@@ -10,11 +10,16 @@ import (
 	"strings"
 	"time"
 
+	"ch3/svc/pkg/client/interceptors"
 	pb "ch3/svc/protos/ordermgt/v1"
 
+	epb "google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
+	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
 const (
@@ -22,14 +27,32 @@ const (
 )
 
 func main() {
-	// FillWithOrders(100)
+	// FillWithOrders(5)
 
-	orders := receiveOrders()
-	packOrdersWithDuplexStreaming(orders)
+	// orders := receiveOrders()
+	// packOrdersWithDuplexStreaming(orders)
+
+	// Testing server-side unary interceptor
+	// GetOrder("8df532fb-cdb8-4627-83c4-0ebab01586d9")
+
+	CreateOrder(-15)
+}
+
+func NewClient() (*grpc.ClientConn, error) {
+	conn, err := grpc.NewClient(
+		address,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithUnaryInterceptor(interceptors.OrderUnaryInterceptor),
+		grpc.WithStreamInterceptor(interceptors.OrderStreamInterceptor),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize gRPC client: %w", err)
+	}
+	return conn, nil
 }
 
 func FillWithOrders(n int) {
-	orders := make([]Order, 100)
+	orders := make([]Order, n)
 
 	for i := 0; i < n; i++ {
 		orders[i] = Order{Price: rand.Float32() * 75}
@@ -56,7 +79,7 @@ type Order struct {
 }
 
 func packOrdersWithDuplexStreaming(orders []*pb.GetOrdersResponse) {
-	conn, err := grpc.NewClient(address, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := NewClient()
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -111,8 +134,42 @@ func printPackedOrders(done chan<- struct{}, clientStream grpc.BidiStreamingClie
 	done <- struct{}{}
 }
 
+func CreateOrder(price float32) *pb.CreateOrderResponse {
+	conn, err := NewClient()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	defer conn.Close()
+	c := pb.NewOrderManagementServiceClient(conn)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+
+	resp, err := c.CreateOrder(ctx, &pb.CreateOrderRequest{Price: price})
+	if err != nil {
+		errorCode := status.Code(err)
+		if errorCode == codes.InvalidArgument {
+			errorStatus := status.Convert(err)
+			for _, d := range errorStatus.Details() {
+				switch info := d.(type) {
+				case *epb.BadRequest_FieldViolation:
+					log.Printf("Request field invalid: %s", info)
+				default:
+					log.Printf("Unexpected error type: %s", info)
+
+				}
+			}
+		} else if errorCode == codes.Unknown {
+			log.Printf("Unhandled CreateOrder error: %v", err)
+		}
+		return nil
+	}
+	return resp
+}
+
 func addOrdersUnary(orders []Order) {
-	conn, err := grpc.NewClient(address, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := NewClient()
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -134,7 +191,7 @@ func addOrdersUnary(orders []Order) {
 }
 
 func addOrdersStreaming(orders []Order) {
-	conn, err := grpc.NewClient(address, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := NewClient()
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -165,8 +222,32 @@ func addOrdersStreaming(orders []Order) {
 
 }
 
+func GetOrder(orderId string) *pb.GetOrderResponse {
+	conn, err := NewClient()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	defer conn.Close()
+	c := pb.NewOrderManagementServiceClient(conn)
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	// Canceling request
+	// go func() {
+	// 	time.Sleep(200 * time.Millisecond)
+	// 	cancel()
+	// }()
+	orderResp, err := c.GetOrder(ctx, wrapperspb.String(orderId))
+	if err != nil {
+		log.Fatal("Couldn't GetOrder: %v", err)
+	}
+
+	return orderResp
+}
+
 func receiveOrders() []*pb.GetOrdersResponse {
-	conn, err := grpc.NewClient(address, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := NewClient()
 	if err != nil {
 		log.Fatal(err)
 	}

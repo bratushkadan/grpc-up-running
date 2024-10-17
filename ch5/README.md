@@ -1,5 +1,11 @@
 # Service
 
+## Run server
+
+```bash
+go run *.go
+```
+
 ## Generate code
 
 ```bash

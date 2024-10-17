@@ -13,6 +13,7 @@ import (
 
 	"github.com/golang/protobuf/ptypes/wrappers"
 	"github.com/google/uuid"
+	epb "google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -39,6 +40,24 @@ var (
 )
 
 func (s *server) CreateOrder(ctx context.Context, req *pb.CreateOrderRequest) (*pb.CreateOrderResponse, error) {
+	if req.Price < 0 {
+		log.Printf("Invalid CreateOrder price requested: %.2f", req.Price)
+		errorStatus := status.New(codes.InvalidArgument, "")
+		ds, err := errorStatus.WithDetails(
+			&epb.BadRequest_FieldViolation{
+				Field:       "price",
+				Description: fmt.Sprintf("Price received (%f) is not valid - can't be negative", req.Price),
+			},
+		)
+		if err != nil {
+			// log the error generating details and return the base error
+			log.Printf("error generating validation details: %v", err)
+			return nil, errorStatus.Err()
+		}
+		// return the generated error
+		return nil, ds.Err()
+	}
+
 	log.Printf("Create order with price = %.2f", req.Price)
 	id := uuid.NewString()
 	orders[id] = Order{Id: id, Price: req.Price}
@@ -68,12 +87,26 @@ func (s *server) CreateOrders(stream grpc.ClientStreamingServer[pb.CreateOrdersR
 	}
 }
 
-func (s *server) GetOrder(ctx context.Context, orderId *wrappers.StringValue) (*pb.GetOrderResponse, error) {
-	log.Printf("Get order id = \"%s\"\n", orderId)
+func (s *server) GetOrder(ctx context.Context, pbOrderId *wrappers.StringValue) (*pb.GetOrderResponse, error) {
+	orderId := pbOrderId.GetValue()
+	log.Printf("Get order id = \"%s\"", orderId)
 
-	order, ok := orders[orderId.String()]
+	// Deadline is propagated
+	// deadline, ok := ctx.Deadline()
+	// if ok {
+	// 	log.Printf("GetOrder context deadline: %v", deadline)
+	// }
+	// log.Print("Now ", time.Now().Format(time.RFC1123Z))
+
+	// Testing DeadlineExceeded/Canceled errors
+	// time.Sleep(1200 * time.Millisecond)
+
+	// log.Printf("Context deadline exceeded: %t", errors.Is(ctx.Err(), context.DeadlineExceeded))
+	// log.Printf("Client RPC cancelled: %t", errors.Is(ctx.Err(), context.Canceled))
+
+	order, ok := orders[orderId]
 	if !ok {
-		return nil, status.New(codes.NotFound, fmt.Sprintf("order id=\"%s\" not found", orderId.String())).Err()
+		return nil, status.New(codes.NotFound, fmt.Sprintf("order id=\"%s\" not found", orderId)).Err()
 	}
 
 	return &pb.GetOrderResponse{Id: order.Id, Price: order.Price}, status.New(codes.OK, "").Err()
@@ -94,6 +127,9 @@ func (s *server) PackOrders(stream grpc.BidiStreamingServer[pb.PackOrdersRequest
 	for {
 		req, err := stream.Recv()
 		if errors.Is(err, io.EOF) {
+			if len(packedOrders) == 0 {
+				return nil
+			}
 			if err := stream.Send(&pb.PackOrdersResponse{Orders: packedOrders}); err != nil {
 				return fmt.Errorf("failed to send PackOrders response: %v", err)
 			}
@@ -122,7 +158,11 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
-	s := grpc.NewServer()
+	// Register the Interceptor at the server-side
+	s := grpc.NewServer(
+		grpc.UnaryInterceptor(orderUnaryServerInterceptor),
+		grpc.StreamInterceptor(orderStreamServerInterceptor),
+	)
 	pb.RegisterOrderManagementServiceServer(s, &server{})
 	if err := s.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)
